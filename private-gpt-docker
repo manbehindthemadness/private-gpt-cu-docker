@@ -1,0 +1,103 @@
+#!/bin/bash
+clear
+# get vars
+default_port=8080
+port="${1:-$default_port}"
+default_instance=private-gpt-ollama-client
+instance="${2:-$default_instance}"
+# check is ollama is instaled on the host
+service_file="/etc/systemd/system/ollama.service"
+if [ ! -f "$service_file" ]; then
+    echo "ollama not found, installing"
+    curl -fsSL https://ollama.com/install.sh | sh
+else
+    echo "ollama install detected, proceding"
+fi
+# check that we are listening on all adaptors
+env_var='Environment="OLLAMA_HOST=0.0.0.0"'
+
+# Check if the Environment variable line is missing
+temp_file=$(mktemp)
+if ! grep -q '^Environment="OLLAMA_HOST=' "$service_file"; then
+    awk -v env_var="$env_var" '
+    BEGIN {in_service_section=0}
+    /^\[Service\]$/ {in_service_section=1}
+    /^\[Install\]$/ {in_service_section=0}
+    {
+        print
+        if (in_service_section && !/^Environment="OLLAMA_HOST=/) {
+            if (/^ExecStart/) {
+                print env_var
+            }
+        }
+    }
+    ' "$service_file" > "$temp_file"
+
+    # Replace the original file with the updated one
+    sudo mv "$temp_file" "$service_file"
+    echo "Added $env_var to the [Service] section of $service_file - restarting service"
+    sudo systemctl daemon-reload
+    sudo service ollama restart
+else
+    echo "$env_var already exists in $service_file"
+fi
+
+git clone https://github.com/zylon-ai/private-gpt.git
+
+# update listening port
+file="Dockerfile.ollama-client"
+echo "setting listening port to $port"
+sed -i "s|ENV PORT=[0-9]*|ENV PORT=$port|" "$file"
+sed -i "s|EXPOSE [0-9]*|EXPOSE $port|" "$file"
+cp ./Dockerfile.ollama-client ./private-gpt/
+cd private-gpt || exit
+# update the ollama address to the docker host
+file="./settings-ollama.yaml"
+sed -i 's|llm_model: llama3.1|llm_model: aya:8b|' "$file"
+sed -i 's|api_base: http://localhost:11434|api_base: http://172.17.0.1:11434|' "$file"
+sed -i 's|embedding_api_base: http://localhost:11434|embedding_api_base: http://172.17.0.1:11434|' "$file"
+# update the embedding settings
+new_embedding_content="embedding:
+  mode: ollama
+  embed_dim: 768
+  ingest_mode: pipeline
+  count_workers: 4
+
+"
+
+temp_file=$(mktemp)
+
+# Use awk to update the embedding section
+awk -v new_content="$new_embedding_content" '
+BEGIN {section=0}
+{
+    if ($0 ~ /^embedding:/) {
+        section=1
+        print new_content
+        next
+    }
+    if (section && $0 ~ /^[a-zA-Z]/ && $0 !~ /^[[:space:]]/) {
+        section=0
+    }
+    if (section) {
+        next
+    }
+    print
+}
+' "$file" > "$temp_file"
+
+# Replace the original file with the updated temporary file
+sudo mv "$temp_file" "$file"
+
+# start docker build
+sudo docker build -f Dockerfile.ollama-client -t "$instance":latest .
+
+filename="run_$instance"
+echo -e "#!/bin/bash\n\
+docker run -d -p \"$port:$port\" \"$instance\"" > "$filename"
+chmod +x "$filename"
+mv "$filename" ../
+
+echo starting test-run
+sudo docker run -it --name "$instance" "$instance":latest /bin/bash
+echo process complete, image can be run detached using ./"$filename"
