@@ -1,5 +1,6 @@
 #!/bin/bash
 clear
+mkdir -p service_units
 # get vars
 default_port=8080
 port="${1:-$default_port}"
@@ -92,12 +93,46 @@ sudo mv "$temp_file" "$file"
 # start docker build
 sudo docker build -f Dockerfile.ollama-client -t "$instance":latest .
 
-filename="run_$instance"
-echo -e "#!/bin/bash\n\
-docker run -d -p \"$port:$port\" \"$instance\"" > "$filename"
-chmod +x "$filename"
-mv "$filename" ../
+# create service unit
+filename="$instance.service"
+exec_start_statement="/usr/bin/docker start -a $instance"
+exec_stop_statement="/usr/bin/docker stop -t 10 $instance"
 
-echo starting test-run
-sudo docker run -it --name "$instance" "$instance":latest /bin/bash
-echo process complete, image can be run detached using ./"$filename"
+unit_contents="[Unit]
+Description=\"$instance\"
+After=network-online.target network.target rsyslog.service ollama.service docker.socket
+Requires=docker.socket
+
+[Service]
+Type=simple
+ExecStart=$exec_start_statement
+ExecStop=$exec_stop_statement
+TimeoutSec=60
+User=root
+
+[Install]
+WantedBy=multi-user.target"
+
+echo "$unit_contents" > "$filename"
+echo "Unit file '$filename' has been created."
+mv "$filename" ../service_units
+cd ../service_units || return
+
+echo build complete creating instance
+sudo docker run -d -p "$port:$port" --name "$instance" "$instance":latest /bin/bash
+sleep 20
+sudo docker stop -t 10 $instance
+
+echo "creation of \"$instance\" complete, create service? [Y/N]"
+read -r answer
+
+# Process the user's response
+if [[ "$answer" =~ ^[Yy]$ ]]; then
+    # If the answer is yes, create the symbolic link
+    sudo ln -s "$(pwd)/$filename" /etc/systemd/system/"$filename"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$filename"
+    echo "Service created and linked to /etc/systemd/system/, starting service..."
+    sudo systemctl start "$filename"
+    sudo journalctl -u "$filename" -f
+fi
