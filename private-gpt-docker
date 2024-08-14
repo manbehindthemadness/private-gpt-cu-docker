@@ -1,5 +1,34 @@
 #!/bin/bash
 clear
+
+# check if we are using a desktop with nvidia drivers installed
+check_nvidia_smi() {
+  if command -v nvidia-smi > /dev/null 2>&1; then
+    return 0  # nvidia-smi is available
+  else
+    return 1  # nvidia-smi is not available
+  fi
+}
+
+# check if we are using a Jetson
+check_jetson_lshw() {
+  if sudo lshw | grep -q "Jetson"; then
+    return 0  # Jetson identified
+  else
+    return 1  # Jetson not identified
+  fi
+}
+
+# Main check
+if check_nvidia_smi; then
+  echo "NVIDIA drivers detected"
+elif check_jetson_lshw; then
+  echo "NVIDIA Jetson identified"
+else
+  echo "NVIDIA GPU not detected, aborting"
+  exit 1
+fi
+
 mkdir -p service_units
 
 # get vars
