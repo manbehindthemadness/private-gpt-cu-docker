@@ -1,11 +1,20 @@
 #!/bin/bash
 clear
 mkdir -p service_units
+
 # get vars
 default_port=8080
 port="${1:-$default_port}"
 default_instance=private-gpt-ollama-client
 instance="${2:-$default_instance}"
+
+# Check if Docker is installed
+if ! command -v docker > /dev/null 2>&1; then
+    echo "Docker is not installed. Installing Docker..."
+    sudo apt-get update
+    sudo apt-get install -y docker.io
+fi
+
 # check is ollama is instaled on the host
 service_file="/etc/systemd/system/ollama.service"
 if [ ! -f "$service_file" ]; then
@@ -14,6 +23,7 @@ if [ ! -f "$service_file" ]; then
 else
     echo "ollama install detected, proceding"
 fi
+
 # check that we are listening on all adaptors
 env_var='Environment="OLLAMA_HOST=0.0.0.0"'
 
@@ -52,11 +62,13 @@ sed -i "s|ENV PORT=[0-9]*|ENV PORT=$port|" "$file"
 sed -i "s|EXPOSE [0-9]*|EXPOSE $port|" "$file"
 cp ./Dockerfile.ollama-client ./private-gpt/
 cd private-gpt || exit
+
 # update the ollama address to the docker host
 file="./settings-ollama.yaml"
 sed -i 's|llm_model: llama3.1|llm_model: aya:8b|' "$file"
 sed -i 's|api_base: http://localhost:11434|api_base: http://172.17.0.1:11434|' "$file"
 sed -i 's|embedding_api_base: http://localhost:11434|embedding_api_base: http://172.17.0.1:11434|' "$file"
+
 # update the embedding settings
 new_embedding_content="embedding:
   mode: ollama
