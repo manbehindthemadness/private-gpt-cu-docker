@@ -28,14 +28,25 @@ else
   echo "NVIDIA GPU not detected, aborting"
   exit 1
 fi
-
+echo "\n\n"
 mkdir -p service_units
 
 # get vars
+deploy_ux=1
 default_port=8080
 port="${1:-$default_port}"
 default_instance=private-gpt-ollama-client
 instance="${2:-$default_instance}"
+
+echo "Deploy default UX? [Y/N]"
+echo Hint: If you are connecting a custom UX from the host, select no.
+read -r answer
+
+
+# Process the user's response
+if [[ "$answer" =~ ^[Nn]$ ]]; then
+    deploy_ux=0
+fi
 
 # Check if Docker is installed
 if ! command -v docker > /dev/null 2>&1; then
@@ -131,6 +142,16 @@ BEGIN {section=0}
 # Replace the original file with the updated temporary file
 sudo mv "$temp_file" "$file"
 
+file="settings.yaml"
+# enable or disable the UX
+if [ "$deploy_ux" -eq 0 ]; then
+    echo setting UX to disabled
+    sed -i '/^\s*ui:/,/^\s*[^ ]/s/^\(\s*enabled:\) true/\1 false/' "$file"
+else
+    echo setting UX to enabled
+    sed -i '/^\s*ui:/,/^\s*[^ ]/s/^\(\s*enabled:\) false/\1 true/' "$file"
+fi
+
 # start docker build
 sudo docker build -f Dockerfile.ollama-client -t "$instance":latest .
 
@@ -160,7 +181,13 @@ mv "$filename" ../service_units
 cd ../service_units || return
 
 echo build complete creating instance
-sudo docker run -d -p "$port:$port" --name "$instance" "$instance":latest /bin/bash
+if [ "$deploy_ux" -eq 0 ]; then
+    echo build specified as API only, container will listen on localhost:"port"
+    sudo docker run -d -p 127.0.0.1:"$port":"$port" --name "$instance" "$instance":latest /bin/bash
+else
+    echo default UX has been deployed, container will listen on 0.0.0.0:"$port"
+    sudo docker run -d -p "$port:$port" --name "$instance" "$instance":latest /bin/bash
+fi
 sleep 20
 sudo docker stop -t 10 $instance
 
