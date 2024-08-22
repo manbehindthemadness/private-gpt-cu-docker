@@ -101,10 +101,29 @@ echo "setting listening port to $port"
 sed -i "s|ENV PORT=[0-9]*|ENV PORT=$port|" "$file"
 sed -i "s|EXPOSE [0-9]*|EXPOSE $port|" "$file"
 cp ./Dockerfile.ollama-client ./private-gpt/
+
+######## TEMPORARY TOKEN_LIMIT FIX #######
+
+cp chat_service.py private-gpt/private_gpt/server/chat/
+
 cd private-gpt || exit
 
+echo "Enable PyTorch (GPU will be used if available)? [Y/N]"
+read -r answer
+# Process the user's response
+if [[ "$answer" =~ ^[Yy]$ ]]; then
+    echo enabling torch
+    sed -i '/torch =.*optional = true/ s/optional = true/optional = false/' pyproject.toml
+else
+    echo disabling torch
+    sed -i '/torch =.*optional = false/ s/optional = false/optional = true/' pyproject.toml
+fi
+
 # update the ollama address to the docker host
+# https://ollama.com/library/aya/blobs/495401f864a6
 file="./settings-ollama.yaml"
+sed -i 's|context_window: 3900|context_window: 8192|' "$file"
+# sed -i 's|max_new_tokens: 512|max_new_tokens: 14336|' "$file"
 sed -i 's|llm_model: llama3.1|llm_model: aya:8b|' "$file"
 sed -i 's|api_base: http://localhost:11434|api_base: http://172.17.0.1:11434|' "$file"
 sed -i 's|embedding_api_base: http://localhost:11434|embedding_api_base: http://172.17.0.1:11434|' "$file"
