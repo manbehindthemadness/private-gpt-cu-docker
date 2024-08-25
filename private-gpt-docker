@@ -60,6 +60,8 @@ service_file="/etc/systemd/system/ollama.service"
 if [ ! -f "$service_file" ]; then
     echo "ollama not found, installing"
     curl -fsSL https://ollama.com/install.sh | sh
+    ollama pull aya:8b
+    ollama serve
 else
     echo "ollama install detected, proceding"
 fi
