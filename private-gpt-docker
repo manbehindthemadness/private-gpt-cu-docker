@@ -174,7 +174,7 @@ else
 fi
 
 # start docker build
-sudo docker build -f Dockerfile.ollama-client -t "$instance":latest .
+sudo docker build -f Dockerfile.ollama-client -t "$default_instance":latest .
 
 # create service unit
 filename="$instance.service"
@@ -204,10 +204,10 @@ cd ../service_units || return
 echo build complete creating instance
 if [ "$deploy_ux" -eq 0 ]; then
     echo build specified as API only, container will listen on localhost:"port"
-    sudo docker run -d -p 127.0.0.1:"$port":"$port" --name "$instance" "$instance":latest /bin/bash
+    sudo docker run -d -p 127.0.0.1:"$port":"$port" --name "$instance" "$default_instance":latest /bin/bash
 else
     echo default UX has been deployed, container will listen on 0.0.0.0:"$port"
-    sudo docker run -d -p "$port:$port" --name "$instance" "$instance":latest /bin/bash
+    sudo docker run -d -p "$port:$port" --name "$instance" "$default_instance":latest /bin/bash
 fi
 sleep 20
 sudo docker stop -t 10 $instance
