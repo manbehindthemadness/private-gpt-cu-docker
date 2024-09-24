@@ -209,7 +209,7 @@ cd ../service_units || return
 
 echo build complete creating instance
 if [ "$deploy_ux" -eq 0 ]; then
-    echo build specified as API only, container will listen on localhost:"port"
+    echo build specified as API only, container will listen on localhost:"$port"
     sudo docker run -d -p 127.0.0.1:"$port":"$port" --name "$instance" "$default_instance":latest /bin/bash
 else
     echo default UX has been deployed, container will listen on 0.0.0.0:"$port"
