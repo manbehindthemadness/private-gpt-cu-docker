@@ -38,6 +38,12 @@ port="${1:-$default_port}"
 default_instance=private-gpt-ollama-client
 instance="${2:-$default_instance}"
 
+# Verify that port is numeric and within the range of 1-65535
+if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+    echo "Error: Port must be a numeric value between 1 and 65535."
+    exit 1
+fi
+
 echo "Deploy default UX? [Y/N]"
 echo Hint: If you are connecting a custom UX from the host, select no.
 read -r answer
