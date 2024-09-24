@@ -44,6 +44,10 @@ if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; th
     exit 1
 fi
 
+if [ -d "private-gpt" ]; then
+    rm -rf "private-gpt"
+fi
+
 echo "Deploy default UX? [Y/N]"
 echo Hint: If you are connecting a custom UX from the host, select no.
 read -r answer
