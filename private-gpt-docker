@@ -44,10 +44,6 @@ if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; th
     exit 1
 fi
 
-if [ -d "private-gpt" ]; then
-    rm -rf "private-gpt"
-fi
-
 echo "Deploy default UX? [Y/N]"
 echo Hint: If you are connecting a custom UX from the host, select no.
 read -r answer
@@ -105,7 +101,13 @@ else
     echo "$env_var already exists in $service_file"
 fi
 
-git clone https://github.com/zylon-ai/private-gpt.git
+if [ -d "private-gpt" ]; then
+    cd private-gpt
+    git reset --hard
+    cd ../
+else
+    git clone https://github.com/zylon-ai/private-gpt.git
+fi
 
 # update listening port
 file="Dockerfile.ollama-client"
